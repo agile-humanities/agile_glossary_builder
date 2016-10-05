@@ -1,0 +1,149 @@
+<?php
+
+function agile_glossary_builder_menu() {
+  $items['agile/build_glossary'] = array(
+    'title' => 'Build Glossary',
+    'type' => MENU_CALLBACK,
+    'page callback' => 'import_glossary',
+    'access arguments' => array('access content'),
+  );
+  return $items;
+}
+
+/**
+ * Imports Glossary
+ */
+function import_glossary() {
+  $vid = get_glossary_vid();
+  if (!$vid) {
+    // Construct vocabulary
+    $glossary = (object) array(
+          'name' => 'Glossary',
+          'description' => 'Glossary of Theatrical Terms',
+          'machine_name' => 'glossary',
+    );
+    taxonomy_vocabulary_save($glossary);
+    $vid = $glossary->vid;
+  }
+  // Import glossary from .sql
+  $path = drupal_get_path('module', 'agile_glossary_builder');
+  $query = file_get_contents("$path/data/gloss.sql");
+  db_query($query);
+  $result = db_select('live_glossary', 'g')
+      ->fields('g')
+      ->execute();
+  while ($record = $result->fetchAssoc()) {
+    // Add terms to glossary
+    if (isset($record['title_en'])) {
+      taxonomy_term_save((object) array(
+            'name' => $record['title_en'],
+            'vid' => $vid,
+            'description' => $record['body_en'],
+            'format' => 'full_html',
+      ));
+    }
+  }
+
+  // Add related terms
+  $terms_info = get_terms_info($vid);
+  foreach ($terms_info as $tid => $description) {
+    $related_terms = get_related_terms($tid, $terms_info);
+
+    if ($related_terms) {
+      //add related to term
+      $glossary_term = taxonomy_term_load($tid);
+      foreach ($related_terms as $related_term) {
+        $glossary_term->field_related_terms['und'][] = array('tid' => $related_term);
+        taxonomy_term_save($glossary_term);
+      }
+    }
+  }
+  drupal_goto('/');
+}
+
+/**
+ * Returns TIDS of all related terms/
+ *
+ * @param string $tid
+ *   TID of host terms
+ *
+ * @return mixed
+ *   Array of associated tids, or FALSE if empty
+ */
+function get_related_terms($tid, $terms_info) {
+  $term = taxonomy_term_load($tid);
+  if (!$term) {
+    return FALSE;
+  }
+  if (property_exists($term, 'description')) {
+    $str = $term->description;
+    if (strlen($str) < 15) {
+      return FALSE;
+    }
+  }
+  else {
+    
+  }
+
+  libxml_use_internal_errors(true);
+  $doc = new DOMDocument();
+  $doc->loadHTML($str);
+  $selector = new DOMXPath($doc);
+  $result = $selector->query('//a');
+  $related_terms = array();
+  foreach ($result as $node) {
+    $candidate_term = strtolower($node->nodeValue);
+    if (empty($candidate_term)) {
+      continue;
+    }
+    $key = array_search($candidate_term, $terms_info);
+    if (!$key === FALSE) {
+      $related_terms[] = (string) $key;
+    }
+  }
+  return $related_terms ? $related_terms : FALSE;
+}
+
+/**
+ * Gets VID of glossary vocabulary
+ * @return type
+ */
+function get_glossary_vid() {
+  $object = taxonomy_vocabulary_machine_name_load('glossary');
+  return $object ? $object->vid : FALSE;
+}
+
+/**
+ * Gets TID => Description pairs for all terms in vocabulary,
+ * 
+ * @param string $vid
+ *   VID of vocabulary
+ * 
+ * @return array
+ *  TID => Description pairs
+ */
+function get_terms_info($vid) {
+  $results = taxonomy_get_tree($vid);
+  foreach ($results as $result) {
+    $term_info[$result->tid] = strtolower($result->name);
+  }
+  return $term_info;
+}
+
+function add_related_items() {
+  module_load_include('module', 'agile_glossary_builder');
+  $vid = get_glossary_vid();
+  $terms_info = get_terms_info($vid);
+  foreach ($terms_info as $tid => $description) {
+    $related_terms = get_related_terms($tid, $terms_info);
+
+    if ($related_terms) {
+      //add related to term
+      $glossary_term = taxonomy_term_load($tid);
+      foreach ($related_terms as $related_term) {
+        $glossary_term->field_related_terms['und'][] = array('tid' => $related_term);
+        taxonomy_term_save($glossary_term);
+      }
+    }
+  }
+}

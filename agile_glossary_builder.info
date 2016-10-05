@@ -1,0 +1,4 @@
+name = Agile Humanities Glossary Builder
+description = Glossary Builder
+package = Agile Humanities
+core = 7.x
