@@ -3,13 +3,13 @@
 function agile_glossary_builder_menu() {
   $items['agile/build_glossary'] = array(
     'title' => 'Build Glossary',
-    'type' => MENU_CALLBACK,
+    'type' => MENU_NORMAL_ITEM,
     'page callback' => 'import_glossary',
     'access arguments' => array('access content'),
   );
   $items['agile/update_glossary'] = array(
     'title' => 'Update Glossary',
-    'type' => MENU_CALLBACK,
+    'type' => MENU_NORMAL_ITEM,
     'page callback' => 'glossary_change_urls',
     'access arguments' => array('access content'),
   );
@@ -164,6 +164,7 @@ function glossary_change_urls() {
   $missing = array();
   foreach ($terms as $term) {
     $description = $term->description;
+    libxml_use_internal_errors(true);
     $doc = new DOMDocument();
     $doc->loadHTML($description);
     $selector = new DOMXPath($doc);
