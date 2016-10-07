@@ -7,6 +7,12 @@ function agile_glossary_builder_menu() {
     'page callback' => 'import_glossary',
     'access arguments' => array('access content'),
   );
+  $items['agile/update_glossary'] = array(
+    'title' => 'Update Glossary',
+    'type' => MENU_CALLBACK,
+    'page callback' => 'glossary_change_urls',
+    'access arguments' => array('access content'),
+  );
   return $items;
 }
 
@@ -146,4 +152,41 @@ function add_related_items() {
       }
     }
   }
+}
+
+function glossary_change_urls() {
+  $object = taxonomy_vocabulary_machine_name_load('glossary');
+  $terms = taxonomy_get_tree($object->vid);
+  foreach ($terms as $term) {
+    $node_name = strtolower($term->name);
+    $term_info[$node_name] = strtolower($term->tid);
+  }
+  $missing = array();
+  foreach ($terms as $term) {
+    $description = $term->description;
+    $doc = new DOMDocument();
+    $doc->loadHTML($description);
+    $selector = new DOMXPath($doc);
+    $result = $selector->query('//a');
+    foreach ($result as $node) {
+      $name = strtolower($node->nodeValue);
+      if (isset($term_info[$name])) {
+        $tid = $term_info[$name];
+        $href = drupal_get_path_alias("/taxonomy/term/$tid");
+        $node->setAttribute('href', $href);
+      }
+      else {
+        $missing[] = "$term->name ~ $name";
+        $newnode = $doc->createElement('span', $name);
+        $node->parentNode->replaceChild($newnode, $node);
+      }
+    }
+    $output = $doc->saveXML();
+    $bits = explode('<body>', $output);
+    $bits = explode('</body>', $bits[1]);
+    $term->description = $bits[0];
+    taxonomy_term_save($term);
+  }
+  dsm($missing);
+  drupal_goto('/');
 }
