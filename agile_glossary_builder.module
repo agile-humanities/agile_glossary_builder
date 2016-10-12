@@ -41,10 +41,16 @@ function import_glossary() {
   while ($record = $result->fetchAssoc()) {
     // Add terms to glossary
     if (isset($record['title_en'])) {
+      $description = str_replace('“', '"', $record['body_en']);
+      $description = str_replace('”', '"', $description);
+      $description = str_replace("’", "'", $description);
+      $description = str_replace("é", "e", $description);
+      $description = str_replace("â", "a", $description);
+      $description = str_replace("–", "-", $description);
       taxonomy_term_save((object) array(
             'name' => $record['title_en'],
             'vid' => $vid,
-            'description' => $record['body_en'],
+            'description' => $description,
             'format' => 'full_html',
       ));
     }
@@ -163,9 +169,9 @@ function glossary_change_urls() {
   }
   $missing = array();
   foreach ($terms as $term) {
-    $description = $term->description;
+    $description = utf8_encode($term->description);
     libxml_use_internal_errors(true);
-    $doc = new DOMDocument();
+    $doc = new DomDocument('1.0');
     $doc->loadHTML($description);
     $selector = new DOMXPath($doc);
     $result = $selector->query('//a');
@@ -178,7 +184,7 @@ function glossary_change_urls() {
       }
       else {
         $missing[] = "$term->name ~ $name";
-        $newnode = $doc->createElement('span', $name);
+        $newnode = $doc->createElement('span', $node->nodeValue);
         $node->parentNode->replaceChild($newnode, $node);
       }
     }
@@ -188,6 +194,5 @@ function glossary_change_urls() {
     $term->description = $bits[0];
     taxonomy_term_save($term);
   }
-  dsm($missing);
   drupal_goto('/');
 }
